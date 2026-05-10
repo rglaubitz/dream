@@ -64,9 +64,10 @@ done < "$MEMORY_FILE"
 # Check 5: Index link targets exist in memory-dir or archived/
 # Matches: - [Title](file.md)
 line_num=0
+link_rx='\]\(([^)]+\.md)\)'
 while IFS= read -r line; do
     line_num=$(( line_num + 1 ))
-    if [[ "$line" =~ \]\(([^)]+\.md)\) ]]; then
+    if [[ "$line" =~ $link_rx ]]; then
         target="${BASH_REMATCH[1]}"
         basename_target="${target##*/}"
         if [[ ! -f "${MEMORY_DIR}/${basename_target}" ]] && \

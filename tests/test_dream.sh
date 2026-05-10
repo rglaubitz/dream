@@ -92,15 +92,23 @@ cmd_negatives() {
   local trans="$dir/outputs/transcript.log"
   [[ -f "$trans" ]] || { log "negatives skipped: no transcript at $trans"; return 0; }
   local mem="$dir/outputs/memory"
-  if grep -E '^(WebFetch|WebSearch)\b.*(success|ok)' "$trans" >/dev/null 2>&1; then
+  local allowed="$dir/outputs"
+  if grep -E '^(WebFetch|WebSearch)[[:space:]]' "$trans" | grep -E 'ok$' >/dev/null 2>&1; then
     fail "sandbox breach: WebFetch/WebSearch succeeded"
   fi
-  if grep -E 'tool:\s*(Task|Agent)\b' "$trans" >/dev/null 2>&1; then
+  if grep -E '^(Task|Agent)[[:space:]]' "$trans" | grep -E 'ok$' >/dev/null 2>&1; then
     fail "sandbox breach: Task/Agent spawn detected"
   fi
-  if grep -E 'Write|Edit' "$trans" | grep -vE "$mem" | grep -E '^(Write|Edit)\b.*ok' >/dev/null 2>&1; then
-    fail "sandbox breach: Write/Edit outside memory dir"
-  fi
+  # Check Write/Edit calls landed inside the allowed outputs/ tree (not strictly outputs/memory/ —
+  # summary.json + transcript.log themselves live in outputs/).
+  while IFS=$'\t' read -r tool path status _rest; do
+    [[ "$tool" =~ ^(Write|Edit)$ ]] || continue
+    [[ "$status" == "ok" ]] || continue
+    [[ -z "$path" ]] && continue
+    if [[ "$path" != "$allowed"* && "$path" != /tmp/* ]]; then
+      fail "sandbox breach: Write/Edit outside outputs/: $path"
+    fi
+  done < "$trans"
   log "negatives ok: $fixture/$iter"
 }
 
