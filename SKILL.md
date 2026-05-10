@@ -72,6 +72,16 @@ schema drifted — note it in the summary so the operator can investigate.
 | `med`  | Session entry 30-150 lines OR 1-2 threads OR some new facts                         |
 | `high` | Session entry > 150 lines OR ≥3 threads OR explicit decision/contradiction language |
 
+**Memory-state override:** if MEMORY.md is currently over any hard cap
+(>200 lines OR >25 KB OR any index line >150 chars), or if the session/thread
+material _explicitly_ flags Prune work as needed (e.g., "memory index over cap",
+"too many entries", "let's clean up MEMORY.md"), upgrade the signal to `high`
+regardless of the session-line / thread-count rubric above. The reasoning: when
+the memory state itself demands non-trivial Prune work, a med-signal label
+understates how much work this dream needs to do, and downstream consumers
+(burn-in dashboards, the validation gate's signal-aware check) lose useful
+discrimination.
+
 Also grep `~/.claude/projects/<encoded-cwd>/*.jsonl` for `tool_use` events with
 `name: "Read"` on each memory file path to compute `read_count`. Count assistant
 text mentions of the file's basename (minus Read events) for `route_count`. In
@@ -99,6 +109,13 @@ subject area.
 fact, adds nuance, or fills a gap. Edit in place. Rewrite only the contradicted
 lines. Update the index hook in MEMORY.md if the one-line description changed.
 This is the default consolidation op — prefer it over DELETE.
+
+> **First-pass hook discipline:** when you rewrite an index hook (here in
+> UPDATE, or anywhere else you author a `- [Title](file.md) — hook` line),
+> target **≤140 characters**, not ≤150. The 10-character margin keeps you
+> off the validation gate's line-length cap and avoids a redundant auto-fix
+> TRIM pass on the same line you just wrote. Auto-fix exists for memory
+> you inherited, not for hooks you authored this run.
 
 **CREATE** — signal is genuinely new and doesn't fit any existing file. Write
 a new topic file using the calling agent's declared auto-memory schema (check
@@ -198,7 +215,27 @@ Hard caps (invariants, not targets):
 
 **TRIM** — an index line exceeds 150 chars because it carries prose that belongs
 in the topic file. Shorten the line. Move the detail into the file body. The
-index hook should be one punchy sentence.
+index hook should be one punchy sentence (target ≤140 chars per the first-pass
+discipline above).
+
+> **TRIM counts index lines only.** A line that looks like
+> `- [Title](file.md) — hook…` and points at a real topic file is
+> eligible. HTML comments, padding lines, non-standard section dividers,
+> and anything that isn't a valid `[Title](file.md)` pointer is **not**
+> an index line — silently strip those during normal MEMORY.md hygiene
+> without counting them as TRIM ops. If a MEMORY.md you inherited has
+> 50+ pad lines, that's structural cleanup, not 50 TRIMs. Same for the
+> case where an entire non-standard section (e.g. `## Notes` with no
+> file pointers) needs collapsing.
+>
+> Also, when you rewrite an UPDATE'd index hook into a shorter form
+> in the same run, that's part of the UPDATE op — **don't double-count
+> it as a separate TRIM** unless the line was _already_ over 150 chars
+> in the inherited MEMORY.md before this run started.
+>
+> Why: TRIM count is a signal we use to spot prompt-iteration drift. If
+> structural junk inflates the count, it stops being a useful signal.
+> Keep it scoped to legitimate index lines.
 
 **REMOVE** — an index line points to a topic file that Consolidate just deleted.
 Drop the line.
