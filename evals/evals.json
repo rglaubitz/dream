@@ -1,0 +1,83 @@
+{
+  "skill_name": "dream",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "You are a fleet agent finishing a session. Run the /dream memory-consolidation skill against the fixture at tests/fixtures/clean-tight/inputs/memory/ using the journal artifacts at tests/fixtures/clean-tight/inputs/journals/ as the recent-session signal. Read the skill's SKILL.md, follow the 4-phase workflow (preconditions → consolidate → prune & index → validate), and emit the structured summary JSON to stdout. Do not modify files outside the working copy of the memory directory. Save the summary JSON to outputs/summary.json and any modified memory files to outputs/memory/.",
+      "expected_output": "Negative-control fixture. Memory is already tight, session signal is low. Expected: zero non-NOOP consolidate ops, zero prune ops, validation passes on first attempt, summary JSON includes preconditions_unmet=null and signal_level='low'. Any UPDATE/CREATE/DELETE/TRIM/DEMOTE op fired against this fixture is a false positive.",
+      "files": [
+        "tests/fixtures/clean-tight/inputs/memory/MEMORY.md",
+        "tests/fixtures/clean-tight/expected-diff.md"
+      ],
+      "expectations": [
+        "Summary JSON parses cleanly via json.loads",
+        "Summary JSON ops.consolidate.update == 0",
+        "Summary JSON ops.consolidate.create == 0",
+        "Summary JSON ops.consolidate.delete == 0",
+        "Summary JSON ops.consolidate.merge == 0",
+        "Summary JSON ops.prune is all-zero across trim/remove/demote/promote/merge_lines",
+        "Summary JSON validation.passed == true",
+        "Summary JSON validation.auto_fix_used == false",
+        "Summary JSON signal_level == 'low'",
+        "Summary JSON preconditions_unmet is null",
+        "Summary JSON includes ops.consolidate.noop > 0 with rationale prose",
+        "No file under outputs/memory/ differs in content from the original fixture inputs/memory/",
+        "MEMORY.md output line count equals input line count",
+        "phase_skipped_suspected anomaly flag is NOT raised (low-signal + zero-ops is the healthy combination)",
+        "validate_memory.sh exits 0 against outputs/memory/"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "You are a fleet agent finishing a session. Run the /dream memory-consolidation skill against the fixture at tests/fixtures/drifted-medium/inputs/memory/ using the journal artifacts at tests/fixtures/drifted-medium/inputs/journals/ as the recent-session signal. Read the skill's SKILL.md, follow the 4-phase workflow, apply the verification rule before any DELETE, and emit the structured summary JSON. The fixture has 3 planted drift cases (one project-status, one reference-path, one feedback reversal). Save the summary JSON to outputs/summary.json and modified memory files to outputs/memory/.",
+      "expected_output": "Primary positive case. Three UPDATE ops fire — one per planted drift — applied in place (no DELETE). Specific files modified: project_analyzer_pipeline.md (status drift), reference_deploy_symlink.md (path drift), feedback_eval_scoring.md (preference reversal). Index hooks for those three lines may be rewritten and TRIMmed; no other index changes. Validation passes.",
+      "files": [
+        "tests/fixtures/drifted-medium/inputs/memory/MEMORY.md",
+        "tests/fixtures/drifted-medium/expected-diff.md"
+      ],
+      "expectations": [
+        "Summary JSON parses cleanly via json.loads",
+        "Summary JSON ops.consolidate.update == 3",
+        "Summary JSON ops.consolidate.delete == 0",
+        "Summary JSON ops.consolidate.create == 0",
+        "Summary JSON ops.consolidate.merge == 0",
+        "outputs/memory/project_analyzer_pipeline.md content differs from input (UPDATE applied)",
+        "outputs/memory/reference_deploy_symlink.md content differs from input (UPDATE applied)",
+        "outputs/memory/feedback_eval_scoring.md content differs from input (UPDATE applied)",
+        "No DELETE op fires against any of the 3 drift-target files (verification rule: contradicted-by-newer-signal alone is not enough to delete)",
+        "Other 13 topic files are unchanged (NOOP for stable content)",
+        "Summary JSON validation.passed == true",
+        "Updated index hooks for the 3 affected files are each ≤150 chars",
+        "Summary JSON signal_level is 'med' or 'high'",
+        "feedback_eval_scoring.md UPDATE preserves the original date-stamped guidance as historical context (per drift-examples.md)",
+        "validate_memory.sh exits 0 against outputs/memory/"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "You are a fleet agent finishing a session. Run the /dream memory-consolidation skill against the fixture at tests/fixtures/oversized/inputs/memory/ using the journal artifacts at tests/fixtures/oversized/inputs/journals/ as the recent-session signal. Read the skill's SKILL.md, follow the 4-phase workflow, and apply the Prune & Index ops to bring MEMORY.md back under its hard caps. The fixture's MEMORY.md starts at 220 lines (over the 200-line cap) with multiple overlong index lines and at least 3 stale topic files that are DEMOTE candidates. Save the summary JSON to outputs/summary.json and modified memory files to outputs/memory/. Any files DEMOTEd should be moved to outputs/memory/archived/<filename>.",
+      "expected_output": "Prune-heavy run. Consolidate is mostly NOOP; the work is in TRIM (5 overlong index lines), DEMOTE (3 stale files moved to archived/), and one MERGE-LINES (batch subsystem). MEMORY.md ends ≤200 lines and ≤25,600 bytes. Validation passes. The over_cap_unresolved anomaly is NOT raised.",
+      "files": [
+        "tests/fixtures/oversized/inputs/memory/MEMORY.md",
+        "tests/fixtures/oversized/expected-diff.md"
+      ],
+      "expectations": [
+        "Summary JSON parses cleanly via json.loads",
+        "Summary JSON ops.prune.trim is between 4 and 7 inclusive",
+        "Summary JSON ops.prune.demote is 3 or 4",
+        "Summary JSON ops.prune.merge_lines is 1",
+        "outputs/memory/MEMORY.md line count is ≤200",
+        "outputs/memory/MEMORY.md byte size is ≤25600",
+        "outputs/memory/archived/ exists and contains 3 or 4 .md files",
+        "Files moved to archived/ retain their original filenames (DEMOTE preserves names per constants.md)",
+        "Index lines for DEMOTEd files are removed from MEMORY.md (REMOVE-equivalent inside Prune)",
+        "All remaining index lines in MEMORY.md are ≤150 chars",
+        "Summary JSON validation.passed == true",
+        "Summary JSON anomalies does NOT include over_cap_unresolved",
+        "Summary JSON signal_level == 'high'",
+        "validate_memory.sh exits 0 against outputs/memory/",
+        "Topic files NOT moved to archived/ (the active ones) are unchanged in content"
+      ]
+    }
+  ]
+}
